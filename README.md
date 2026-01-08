@@ -7,6 +7,8 @@
 ![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
 ![Security](https://img.shields.io/badge/Security-Biometric-red?style=for-the-badge)
 
+![Feature Graphic](assets/invoice_gem.png)
+
 ## ✨ Features
 
 * **📄 Professional PDF Invoices**: Generate branded invoices with your logo and signature in seconds.
