@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'setup_screen.dart';
 import 'create_invoice_screen.dart';
 import 'view_all_screen.dart';
+import 'package:in_app_update/in_app_update.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -27,7 +28,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _checkForUpdate();
     _refreshData();
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final info = await InAppUpdate.checkForUpdate();
+      
+      // If an update is available (FLEXIBLE means they can keep using the app while it downloads)
+      if (info.updateAvailability == UpdateAvailability.updateAvailable) {
+        
+        // You can choose 'IMMEDIATE' (blocks the app until updated) 
+        // or 'FLEXIBLE' (downloads in background).
+        await InAppUpdate.startFlexibleUpdate();
+        
+        // For Flexible updates, you must complete it once downloaded
+        await InAppUpdate.completeFlexibleUpdate();
+      }
+    } catch (e) {
+      // It might fail in debug mode because the app isn't actually on the Play Store yet.
+    }
   }
 
   Future<void> _refreshData() async {
@@ -297,17 +318,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+Widget _buildEmptyState() {
     return Center(
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const SizedBox(height: 10),
-          Icon(Icons.receipt_long_outlined, size: 50, color: Colors.grey[400]),
-          const SizedBox(height: 5),
-          Text(
-            "No invoices yet",
-            style: TextStyle(color: Colors.grey[600], fontSize: 14),
+          // 1. Icon with a soft background circle
+          Container(
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1), // Soft blue background
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.receipt_long_outlined, 
+              size: 60, 
+              color: Colors.blue[300] // Lighter blue icon
+            ),
           ),
+          
+          const SizedBox(height: 20),
+          
+          // 2. Bold Title
+          Text(
+            "No Invoices Yet",
+            style: TextStyle(
+              color: Colors.grey[800], 
+              fontSize: 20,
+              fontWeight: FontWeight.bold
+            ),
+          ),
+          
+          const SizedBox(height: 10),
+          
+          // 3. Helpful Subtitle (Call to Action)
+          Text(
+            "Tap the + button below to create\nyour first professional invoice.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.grey[500], 
+              fontSize: 14,
+              height: 1.5 // Better line spacing
+            ),
+          ),
+          
+          // Optional: Add some bottom spacing so it doesn't look centered too low
+          const SizedBox(height: 50),
         ],
       ),
     );

@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.9.2
@@ -46,6 +46,8 @@ dependencies:
   csv: ^6.0.0
   share_plus: ^12.0.1
   package_info_plus: ^9.0.0
+  in_app_update: ^4.2.5
+  in_app_review: ^2.0.11
 
 dev_dependencies:
   flutter_test:
@@ -59,6 +61,7 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.3
   change_app_package_name: ^1.4.0
+  flutter_native_splash: ^2.4.0
  
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -108,3 +111,10 @@ flutter_launcher_icons:
   min_sdk_android: 21 # Required for modern Android
   adaptive_icon_background: "#1A237E" # Matches your Deep Blue Brand
   adaptive_icon_foreground: "assets/app_icon.png"  
+
+flutter_native_splash:
+  color: "#1A237E" # Your Deep Blue Brand Color
+  image: "assets/app_icon.png" # Your Logo
+  android_12:
+    image: "assets/app_icon.png"
+    color: "#1A237E"  

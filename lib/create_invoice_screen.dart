@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:invoice_generator/custom_dialog.dart';
 import 'invoice_model.dart';
 import 'pdf_preview_screen.dart';
+import 'package:in_app_review/in_app_review.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CreateInvoiceScreen extends StatefulWidget {
   const CreateInvoiceScreen({super.key});
@@ -54,6 +56,20 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       _items.removeAt(index);
     });
     _calculateTotal();
+  }
+
+  void _resetForm() {
+    setState(() {
+      _clientNameController.clear();
+      _clientAddressController.clear();
+      _taxController.text = '0';
+      _discountController.text = '0';
+      _paymentLinkController.clear();
+      _selectedDate = DateTime.now();
+      _items.clear();
+      _items.add(InvoiceItem()); // Always keep one empty row
+      _grandTotal = 0.0;
+    });
   }
 
   // Add this method to _CreateInvoiceScreenState
@@ -180,33 +196,37 @@ Future<void> _showProductPicker(int index) async {
     }
   }
 
-  Future<void> _generateInvoice() async {
+Future<void> _generateInvoice() async {
+    // 1. Validation
     if (_clientNameController.text.isEmpty) {
       CustomDialog.show(
-    context,
-    title: "Missing Details",
-    message: "Please select a client or enter a client name to proceed.",
-    isSuccess: false // Shows Red Icon
-  );
+        context,
+        title: "Missing Details",
+        message: "Please select a client or enter a client name to proceed.",
+        isSuccess: false
+      );
       return;
     }
 
+    // 2. Save Client Data
     if (_clientNameController.text.isNotEmpty) {
-    await ClientManager.saveClient(Client(
-      name: _clientNameController.text, 
-      address: _clientAddressController.text
-    ));
-  }
-
-  for (var item in _items) {
-    if (item.description.isNotEmpty && item.unitPrice > 0) {
-      await ProductManager.saveProduct(Product(
-        name: item.description, 
-        price: item.unitPrice
+      await ClientManager.saveClient(Client(
+        name: _clientNameController.text, 
+        address: _clientAddressController.text
       ));
     }
-  }
 
+    // 3. Save Products (Auto-learning)
+    for (var item in _items) {
+      if (item.description.isNotEmpty && item.unitPrice > 0) {
+        await ProductManager.saveProduct(Product(
+          name: item.description, 
+          price: item.unitPrice
+        ));
+      }
+    }
+
+    // 4. Create Invoice Object
     final double tax = (double.tryParse(_taxController.text) ?? 0) / 100;
     final double discount = double.tryParse(_discountController.text) ?? 0;
 
@@ -214,23 +234,80 @@ Future<void> _showProductPicker(int index) async {
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       clientName: _clientNameController.text,
       clientAddress: _clientAddressController.text,
-      items: _items,
+      items: List.from(_items),
       date: _selectedDate,
       taxRate: tax,
       discountAmount: discount,
       paymentLink: _paymentLinkController.text,
-      currencySymbol: _selectedCurrency, // Pass the currency
+      currencySymbol: _selectedCurrency,
     );
 
+    // 5. Save to History
     await InvoiceManager.saveInvoice(invoice);
 
+    // --- NEW: Smart Review Prompt Logic ---
+    try {
+      final InAppReview inAppReview = InAppReview.instance;
+      
+      if (await inAppReview.isAvailable()) {
+        final prefs = await SharedPreferences.getInstance();
+        
+        // Get current count (default to 0)
+        int count = prefs.getInt('invoice_generation_count') ?? 0;
+        
+        // Increment count
+        await prefs.setInt('invoice_generation_count', count + 1);
+
+        // Check if it's the 3rd, 10th, 20th... invoice (Adjust number as you like)
+        // Using (count + 1) because we just incremented it
+        if ((count + 1) % 5 == 0) { 
+           // This will show the system rating dialog overlay
+           // We await it so it doesn't clash with the navigation immediately
+           await inAppReview.requestReview();
+        }
+      }
+    } catch (e) {
+      print("Review prompt error: $e"); // Fail silently so app doesn't crash
+    }
+    // --------------------------------------
+
+    // 6. Navigate & Wait
     if (mounted) {
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => PdfPreviewScreen(invoice: invoice),
         ),
       );
+
+      // 7. ON RETURN: Ask user what to do
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text("Invoice Saved!"),
+            content: const Text("Would you like to start a new invoice or keep editing this one?"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context), // Close dialog, keep data
+                child: const Text("Keep Editing", style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context); // Close dialog
+                  _resetForm(); // WIPE DATA
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue[900],
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text("Start New Invoice"),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 
@@ -491,7 +568,7 @@ Row(
                       Expanded(
                         child: _buildModernTextField(
                           controller: _taxController, 
-                          label: "Tax %", 
+                          label: "Tax Rate %", 
                           isNumber: true,
                           suffix: "%",
                           onChanged: (_) => setState((){}),
@@ -513,8 +590,9 @@ Row(
                   _buildModernTextField(
                     controller: _paymentLinkController,
                     label: "Payment Link / M-Pesa",
-                    icon: Icons.qr_code,
-                    hint: "https://paypal.me/..."
+                    icon: Icons.link,
+  inputType: TextInputType.url, // <--- Optimized for links
+  hint: "e.g. pay.google.com or M-Pesa Paybill",
                   ),
                 ],
               ),
@@ -590,11 +668,12 @@ Row(
     );
   }
 
-  Widget _buildModernTextField({
+Widget _buildModernTextField({
     TextEditingController? controller,
     required String label,
     IconData? icon,
-    bool isNumber = false,
+    bool isNumber = false,       // Quick flag for numbers
+    TextInputType? inputType,    // NEW: Detailed control (Email, Url, Phone)
     int maxLines = 1,
     String? prefix,
     String? suffix,
@@ -603,7 +682,10 @@ Row(
   }) {
     return TextField(
       controller: controller,
-      keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+      // LOGIC: Use custom type if provided -> otherwise check isNumber -> default to Text
+      keyboardType: inputType ?? (isNumber 
+          ? const TextInputType.numberWithOptions(decimal: true) 
+          : TextInputType.text),
       maxLines: maxLines,
       onChanged: onChanged,
       style: const TextStyle(fontWeight: FontWeight.w500),
